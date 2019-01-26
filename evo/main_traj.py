@@ -81,7 +81,7 @@ def parser():
                              action="store_true")
     output_opts.add_argument(
         "--plot_mode", help="the axes for  plot projection", default=None,
-        choices=["xy", "yx", "xz", "zx", "yz", "xyz"])
+        choices=["xy", "xz", "yx", "yz", "zx", "zy", "xyz"])
     output_opts.add_argument("--save_plot", help="path to save plot",
                              default=None)
     output_opts.add_argument("--serialize_plot",
@@ -96,6 +96,8 @@ def parser():
     output_opts.add_argument("--save_as_bag",
                              help="save trajectories in ROS bag as <date>.bag",
                              action="store_true")
+    output_opts.add_argument("--logfile", help="Local logfile path.",
+                             default=None)
     usability_opts.add_argument("--no_warnings",
                                 help="no warnings requiring user confirmation",
                                 action="store_true")
@@ -140,14 +142,11 @@ def parser():
         "bag", description="%s for ROS bag files - %s" % (basic_desc, lic),
         parents=[shared_parser])
     bag_parser.add_argument("bag", help="ROS bag file")
-    bag_parser.add_argument(
-        "topics",
-        help="multiple geometry_msgs/PoseStamped or nav_msgs/Odometry topics",
-        nargs='*')
-    bag_parser.add_argument(
-        "--all_topics", help=
-        "use all geometry_msgs/PoseStamped and nav_msgs/Odometry topics in the bag",
-        action="store_true")
+    bag_parser.add_argument("topics", help="multiple trajectory topics",
+                            nargs='*')
+    bag_parser.add_argument("--all_topics",
+                            help="use all compatible topics in the bag",
+                            action="store_true")
     return main_parser
 
 
@@ -196,13 +195,13 @@ def load_trajectories(args):
             if args.all_topics:
                 topic_info = bag.get_type_and_topic_info()
                 topics = sorted([
-                    t for t in topic_info[1].keys() if topic_info[1][t][0] in
-                    {"geometry_msgs/PoseStamped", "nav_msgs/Odometry"}
+                    t for t in topic_info[1].keys()
+                    if topic_info[1][t][0] in file_interface.SUPPORTED_ROS_MSGS
                     and t != args.ref
                 ])
                 if len(topics) == 0:
-                    die("No geometry_msgs/PoseStamped or nav_msgs/Odometry "
-                        "topics found!")
+                    die("No topics of supported types: {}".format(" ".join(
+                        file_interface.SUPPORTED_ROS_MSGS)))
             else:
                 topics = args.topics
             for topic in topics:
@@ -264,7 +263,7 @@ def run(args):
     from evo.tools.settings import SETTINGS
 
     log.configure_logging(verbose=args.verbose, silent=args.silent,
-                          debug=args.debug)
+                          debug=args.debug, local_logfile=args.logfile)
     if args.debug:
         import pprint
         logger.debug("main_parser config:\n" + pprint.pformat(
@@ -356,12 +355,19 @@ def run(args):
             short_traj_name = os.path.splitext(os.path.basename(args.ref))[0]
             if SETTINGS.plot_usetex:
                 short_traj_name = short_traj_name.replace("_", "\\_")
-            plot.traj(ax_traj, plot_mode, ref_traj, '--', 'grey',
-                      short_traj_name, alpha=0 if SETTINGS.plot_hideref else 1)
-            plot.traj_xyz(axarr_xyz, ref_traj, '--', 'grey', short_traj_name,
-                          alpha=0 if SETTINGS.plot_hideref else 1)
-            plot.traj_rpy(axarr_rpy, ref_traj, '--', 'grey', short_traj_name,
-                          alpha=0 if SETTINGS.plot_hideref else 1)
+            plot.traj(ax_traj, plot_mode, ref_traj,
+                      style=SETTINGS.plot_reference_linestyle,
+                      color=SETTINGS.plot_reference_color,
+                      label=short_traj_name,
+                      alpha=SETTINGS.plot_reference_alpha)
+            plot.traj_xyz(
+                axarr_xyz, ref_traj, style=SETTINGS.plot_reference_linestyle,
+                color=SETTINGS.plot_reference_color, label=short_traj_name,
+                alpha=SETTINGS.plot_reference_alpha)
+            plot.traj_rpy(
+                axarr_rpy, ref_traj, style=SETTINGS.plot_reference_linestyle,
+                color=SETTINGS.plot_reference_color, label=short_traj_name,
+                alpha=SETTINGS.plot_reference_alpha)
 
         cmap_colors = None
         if SETTINGS.plot_multi_cmap.lower() != "none":
@@ -376,14 +382,17 @@ def run(args):
             short_traj_name = os.path.splitext(os.path.basename(name))[0]
             if SETTINGS.plot_usetex:
                 short_traj_name = short_traj_name.replace("_", "\\_")
-            plot.traj(ax_traj, plot_mode, traj, '-', color, short_traj_name)
+            plot.traj(ax_traj, plot_mode, traj, '-', color, short_traj_name,
+                      alpha=SETTINGS.plot_trajectory_alpha)
             if args.ref and isinstance(ref_traj, trajectory.PoseTrajectory3D):
                 start_time = ref_traj.timestamps[0]
             else:
                 start_time = None
             plot.traj_xyz(axarr_xyz, traj, '-', color, short_traj_name,
+                          alpha=SETTINGS.plot_trajectory_alpha,
                           start_timestamp=start_time)
             plot.traj_rpy(axarr_rpy, traj, '-', color, short_traj_name,
+                          alpha=SETTINGS.plot_trajectory_alpha,
                           start_timestamp=start_time)
 
         plot_collection.add_figure("trajectories", fig_traj)

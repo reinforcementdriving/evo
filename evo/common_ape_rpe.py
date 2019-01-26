@@ -38,10 +38,6 @@ def load_trajectories(args):
         traj_est = file_interface.read_kitti_poses_file(args.est_file)
         ref_name, est_name = args.ref_file, args.est_file
     elif args.subcommand == "euroc":
-        args.align = True
-        logger.info("Forcing trajectory alignment implicitly "
-                    "(EuRoC ground truth is in IMU frame).")
-        logger.debug(SEP)
         traj_ref = file_interface.read_euroc_csv_trajectory(args.state_gt_csv)
         traj_est = file_interface.read_tum_trajectory_file(args.est_file)
         ref_name, est_name = args.state_gt_csv, args.est_file
@@ -123,8 +119,9 @@ def plot(args, result, traj_ref, traj_est):
     # Plot the values color-mapped onto the trajectory.
     fig2 = plt.figure(figsize=SETTINGS.plot_figsize)
     ax = plot.prepare_axis(fig2, plot_mode)
-    plot.traj(ax, plot_mode, traj_ref, '--', 'black', 'reference',
-              alpha=0.0 if SETTINGS.plot_hideref else 0.5)
+    plot.traj(ax, plot_mode, traj_ref, style=SETTINGS.plot_reference_linestyle,
+              color=SETTINGS.plot_reference_color, label='reference',
+              alpha=SETTINGS.plot_reference_alpha)
 
     if args.plot_colormap_min is None:
         args.plot_colormap_min = result.stats["min"]

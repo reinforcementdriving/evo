@@ -33,6 +33,7 @@ import colorama
 from colorama import Fore, Style
 from pygments import highlight, lexers, formatters
 
+from evo import EvoException
 from evo.tools import log, user, settings
 from evo.tools.settings_template import DEFAULT_SETTINGS_DICT_DOC
 from evo.tools.settings_template import DEFAULT_SETTINGS_DICT
@@ -42,7 +43,7 @@ logger = logging.getLogger(__name__)
 SEP = "-" * 80
 
 
-class ConfigError(Exception):
+class ConfigError(EvoException):
     pass
 
 
@@ -70,9 +71,9 @@ def merge_json_union(first, second, soft=False):
         f_1.write(json.dumps(cfg_1, indent=4, sort_keys=True))
 
 
-def is_number(s):
+def is_number(token):
     try:
-        float(s)
+        float(token)
         return True
     except ValueError:
         return False
@@ -237,7 +238,7 @@ def main():
     argcomplete.autocomplete(main_parser)
     if len(sys.argv) > 1 and sys.argv[1] == "set":
         args, other_args = main_parser.parse_known_args()
-        other_args = [arg for arg in sys.argv[2:] if not arg.startswith('-')]
+        other_args = [arg for arg in sys.argv[2:]]
     else:
         args, other_args = main_parser.parse_known_args()
     log.configure_logging()

@@ -69,6 +69,8 @@ def parser():
     output_opts.add_argument(
         "--save_table", help="path to a file to save the results in a table",
         default=None)
+    output_opts.add_argument("--logfile", help="Local logfile path.",
+                             default=None)
     usability_opts.add_argument("--no_warnings",
                                 help="no warnings requiring user confirmation",
                                 action="store_true")
@@ -96,7 +98,8 @@ def run(args):
     pd.options.display.width = 80
     pd.options.display.max_colwidth = 20
 
-    log.configure_logging(args.verbose, args.silent, args.debug)
+    log.configure_logging(args.verbose, args.silent, args.debug,
+                          local_logfile=args.logfile)
     if args.debug:
         import pprint
         arg_dict = {arg: getattr(args, arg) for arg in vars(args)}
@@ -244,7 +247,7 @@ def run(args):
         # handle NaNs from concat() above
         error_df.interpolate(method="index").plot(
             ax=fig_raw.gca(), colormap=colormap, style=linestyles,
-            title=first_title)
+            title=first_title, alpha=SETTINGS.plot_trajectory_alpha)
         plt.xlabel(index_label)
         plt.ylabel(metric_label)
         plt.legend(frameon=True)
@@ -265,7 +268,11 @@ def run(args):
         col_wrap = 2 if len(args.result_files) <= 2 else math.ceil(
             len(args.result_files) / 2.0)
         dist_grid = sns.FacetGrid(raw_tidy, col="estimate", col_wrap=col_wrap)
-        dist_grid.map(sns.distplot, metric_label)  # fits=stats.gamma
+        # TODO: see issue #98
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            dist_grid.map(sns.distplot, metric_label)  # fits=stats.gamma
         plot_collection.add_figure("histogram", dist_grid.fig)
 
         # box plot
