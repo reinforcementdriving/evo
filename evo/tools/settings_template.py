@@ -41,9 +41,20 @@ DEFAULT_SETTINGS_DICT_DOC = {
         "%(message)s",
         "Format string for the logging module (affects only console output)."
     ),
+    "euler_angle_sequence": (
+        "sxyz",
+        ("Only used in evo_traj's RPY plot: Euler rotation axis sequence.\n"
+         "E.g. 'sxyz' or 'ryxy', where s=static or r=rotating frame.\n"
+         "See evo/core/transformations.py for more information.")
+    ),
     "plot_backend": (
         get_default_plot_backend(),
         "matplotlib backend - default: 'Qt{4, 5}Agg' (if PyQt is installed) or 'TkAgg'."
+    ),
+    "plot_statistics": (
+        ["rmse", "median", "mean", "std", "min", "max"],
+        ("Statistics that are included in plots of evo_{ape, rpe, res}.\n"
+         "Can also be set to 'none'.")
     ),
     "plot_export_format": (
         "pdf",
@@ -92,8 +103,9 @@ DEFAULT_SETTINGS_DICT_DOC = {
     ),
     "plot_seaborn_palette": (
         "deep6",
-        "Default color palette of seaborn. Can also be a list of colors.\n"
-        + "See: https://seaborn.pydata.org/generated/seaborn.color_palette.html"
+        "Default color cycle, taken from a palette of the seaborn package.\n"
+        "Can also be a list of colors.\n"
+        "See: https://seaborn.pydata.org/generated/seaborn.color_palette.html"
     ),
     "plot_seaborn_style": (
         "darkgrid",

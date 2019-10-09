@@ -64,7 +64,7 @@ class PosePath3D(object):
 
     def __str__(self):
         return "{} poses, {:.3f}m path length".format(self.num_poses,
-                                                      self.path_length())
+                                                      self.path_length)
 
     def __eq__(self, other):
         if type(other) != type(self):
@@ -92,6 +92,10 @@ class PosePath3D(object):
         return self._positions_xyz
 
     @property
+    def distances(self):
+        return geometry.accumulated_distances(self.positions_xyz)
+
+    @property
     def orientations_quat_wxyz(self):
         if not hasattr(self, "_orientations_quat_wxyz"):
             assert hasattr(self, "_poses_se3")
@@ -101,19 +105,15 @@ class PosePath3D(object):
                      for p in self._poses_se3])
         return self._orientations_quat_wxyz
 
-    @property
-    def orientations_euler(self):
-        if not hasattr(self, "_orientations_euler"):
-            if hasattr(self, "_poses_se3"):
-                self._orientations_euler \
-                    = np.array(
-                        [tr.euler_from_matrix(p, axes="sxyz")
-                         for p in self._poses_se3])
-            elif hasattr(self, "_orientations_quat_wxyz"):
-                self._orientations_euler \
-                    = np.array([tr.euler_from_quaternion(q, axes="sxyz")
-                                for q in self._orientations_quat_wxyz])
-        return self._orientations_euler
+    def get_orientations_euler(self, axes="sxyz"):
+        if hasattr(self, "_poses_se3"):
+            return np.array(
+                [tr.euler_from_matrix(p, axes=axes) for p in self._poses_se3])
+        elif hasattr(self, "_orientations_quat_wxyz"):
+            return np.array([
+                tr.euler_from_quaternion(q, axes=axes)
+                for q in self._orientations_quat_wxyz
+            ])
 
     @property
     def poses_se3(self):
@@ -132,31 +132,37 @@ class PosePath3D(object):
         else:
             return self.positions_xyz.shape[0]
 
-    def path_length(self, ids=None):
+    @property
+    def path_length(self):
         """
         calculates the path length (arc-length)
-        :param ids: optional start and end index as tuple (start, end)
         :return: path length in meters
         """
-        if ids is not None:
-            if len(ids) != 2 or not all(type(i) is int for i in ids):
-                raise TrajectoryException(
-                    "ids must be a tuple of positive integers")
-            return float(geometry.arc_len(self.positions_xyz[ids[0]:ids[1]]))
-        else:
-            return float(geometry.arc_len(self.positions_xyz))
+        return float(geometry.arc_len(self.positions_xyz))
 
-    def transform(self, t, right_mul=False):
+    def transform(self, t, right_mul=False, propagate=False):
         """
         apply a left or right multiplicative SE(3) transformation to the whole path
         :param t: a valid SE(3) matrix
         :param right_mul: whether to apply it right-multiplicative or not
+        :param propagate: whether to propagate drift with RHS transformations
         """
         if not lie.is_se3(t):
             raise TrajectoryException(
                 "transformation is not a valid SE(3) matrix")
-        if right_mul:
+        if right_mul and not propagate:
+            # Transform each pose individually.
             self._poses_se3 = [np.dot(p, t) for p in self.poses_se3]
+        elif right_mul and propagate:
+            # Transform each pose and propagate resulting drift to the next.
+            ids = np.arange(0, self.num_poses, 1)
+            rel_poses = [
+                lie.relative_se3(self.poses_se3[i], self.poses_se3[j]).dot(t)
+                for i, j in zip(ids, ids[1:])
+            ]
+            self._poses_se3 = [self.poses_se3[0]]
+            for i, j in zip(ids[:-1], ids):
+                self._poses_se3.append(self._poses_se3[j].dot(rel_poses[i]))
         else:
             self._poses_se3 = [np.dot(t, p) for p in self.poses_se3]
         self._positions_xyz, self._orientations_quat_wxyz \
@@ -214,7 +220,7 @@ class PosePath3D(object):
         """
         return {
             "nr. of poses": self.num_poses,
-            "path length (m)": self.path_length(),
+            "path length (m)": self.path_length,
             "pos_start (m)": self.positions_xyz[0],
             "pos_end (m)": self.positions_xyz[-1]
         }
@@ -410,6 +416,24 @@ def align_trajectory(traj, traj_ref, correct_scale=False,
         return traj_aligned, r_a, t_a, s
     else:
         return traj_aligned
+
+
+def align_trajectory_origin(traj, traj_ref):
+    """
+    align a trajectory's origin to the origin of a reference trajectory
+    :param traj: the trajectory to align
+    :param traj_ref: reference trajectory
+    :return: the aligned trajectory
+    """
+    if traj.num_poses == 0 or traj_ref.num_poses == 0:
+        raise TrajectoryException("can't align an empty trajectory...")
+    traj_aligned = copy.deepcopy(traj)
+    traj_origin = traj.poses_se3[0]
+    traj_ref_origin = traj_ref.poses_se3[0]
+    to_ref_origin = traj_ref_origin.dot(lie.se3_inverse(traj_origin))
+    logger.debug("Origin alignment transformation:\n{}".format(to_ref_origin))
+    traj_aligned.transform(to_ref_origin)
+    return traj_aligned
 
 
 def merge(trajectories):

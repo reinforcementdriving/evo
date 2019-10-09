@@ -42,8 +42,12 @@ def load_trajectories(args):
         traj_est = file_interface.read_tum_trajectory_file(args.est_file)
         ref_name, est_name = args.state_gt_csv, args.est_file
     elif args.subcommand == "bag":
-        import rosbag
+        import os
         logger.debug("Opening bag file " + args.bag)
+        if not os.path.exists(args.bag):
+            raise file_interface.FileInterfaceException(
+                "File doesn't exist: {}".format(args.bag))
+        import rosbag
         bag = rosbag.Bag(args.bag, 'r')
         try:
             traj_ref = file_interface.read_bag_trajectory(bag, args.ref_topic)
@@ -53,12 +57,6 @@ def load_trajectories(args):
             bag.close()
     else:
         raise KeyError("unknown sub-command: {}".format(args.subcommand))
-
-    if args.subcommand != "kitti":
-        logger.debug("Synchronizing trajectories...")
-        traj_ref, traj_est = sync.associate_trajectories(
-            traj_ref, traj_est, args.t_max_diff, args.t_offset,
-            first_name=ref_name, snd_name=est_name)
 
     return traj_ref, traj_est, ref_name, est_name
 
@@ -81,7 +79,7 @@ def get_pose_relation(args):
 
 def get_delta_unit(args):
     from evo.core.metrics import Unit
-    delta_unit = None
+    delta_unit = Unit.none
     if args.delta_unit == "f":
         delta_unit = Unit.frames
     elif args.delta_unit == "d":
@@ -111,10 +109,13 @@ def plot(args, result, traj_ref, traj_est):
     else:
         seconds_from_start = None
 
-    plot.error_array(fig1, result.np_arrays["error_array"],
-                     x_array=seconds_from_start, statistics=result.stats,
-                     name=result.info["label"], title=result.info["title"],
-                     xlabel="$t$ (s)" if seconds_from_start else "index")
+    plot.error_array(
+        fig1, result.np_arrays["error_array"], x_array=seconds_from_start,
+        statistics={
+            s: result.stats[s]
+            for s in SETTINGS.plot_statistics if s not in ("min", "max")
+        }, name=result.info["label"], title=result.info["title"],
+        xlabel="$t$ (s)" if seconds_from_start else "index")
 
     # Plot the values color-mapped onto the trajectory.
     fig2 = plt.figure(figsize=SETTINGS.plot_figsize)

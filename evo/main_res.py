@@ -44,18 +44,24 @@ Only the first one will be used as the title!"""
 def parser():
     import argparse
     basic_desc = "tool for processing one or multiple result files"
-    lic = "(c) michael.grupp@tum.de"
+    lic = "(c) evo authors"
     main_parser = argparse.ArgumentParser(
         description="%s %s" % (basic_desc, lic))
     output_opts = main_parser.add_argument_group("output options")
     usability_opts = main_parser.add_argument_group("usability options")
     main_parser.add_argument("result_files",
                              help="one or multiple result files", nargs='+')
+    main_parser.add_argument("--merge",
+                             help="merge the results into a single one",
+                             action="store_true")
     main_parser.add_argument("--use_rel_time",
                              help="use relative timestamps if available",
                              action="store_true")
     main_parser.add_argument("--use_filenames",
                              help="use the filenames to label the data",
+                             action="store_true")
+    main_parser.add_argument("--ignore_title",
+                             help="don't try to find a common metric title",
                              action="store_true")
     output_opts.add_argument("-p", "--plot", help="show plot window",
                              action="store_true")
@@ -87,12 +93,31 @@ def parser():
     return main_parser
 
 
+def load_results_as_dataframe(result_files, use_filenames=False, merge=False):
+    import pandas as pd
+    from evo.tools import pandas_bridge
+    from evo.tools import file_interface
+
+    if merge:
+        from evo.core.result import merge_results
+        results = [file_interface.load_res_file(f) for f in result_files]
+        return pandas_bridge.result_to_df(merge_results(results))
+
+    df = pd.DataFrame()
+    for result_file in result_files:
+        result = file_interface.load_res_file(result_file)
+        name = result_file if use_filenames else None
+        df = pd.concat([df, pandas_bridge.result_to_df(result, name)],
+                       axis="columns")
+    return df
+
+
 def run(args):
     import sys
 
     import pandas as pd
 
-    from evo.tools import file_interface, log, user, settings, pandas_bridge
+    from evo.tools import log, user, settings
     from evo.tools.settings import SETTINGS
 
     pd.options.display.width = 80
@@ -106,12 +131,8 @@ def run(args):
         logger.debug("main_parser config:\n{}\n".format(
             pprint.pformat(arg_dict)))
 
-    df = pd.DataFrame()
-    for result_file in args.result_files:
-        result = file_interface.load_res_file(result_file)
-        name = result_file if args.use_filenames else None
-        df = pd.concat([df, pandas_bridge.result_to_df(result, name)],
-                       axis="columns")
+    df = load_results_as_dataframe(args.result_files, args.use_filenames,
+                                   args.merge)
 
     keys = df.columns.values.tolist()
     if SETTINGS.plot_usetex:
@@ -158,9 +179,9 @@ def run(args):
             error_df = pd.concat([error_df, new_error_df], axis=1)
 
     # check titles
-    first_title = df.loc["info", "title"][0]
+    first_title = df.loc["info", "title"][0] if not args.ignore_title else ""
     first_file = args.result_files[0]
-    if not args.no_warnings:
+    if not args.no_warnings and not args.ignore_title:
         checks = df.loc["info", "title"] != first_title
         for i, differs in enumerate(checks):
             if not differs:
@@ -174,6 +195,7 @@ def run(args):
                                              mismatching_title,
                                              mismatching_file))
                 if not user.confirm(
+                        "You can use --ignore_title to just aggregate data.\n"
                         "Go on anyway? - enter 'y' or any other key to exit"):
                     sys.exit()
 
@@ -183,8 +205,9 @@ def run(args):
 
     # show a statistics overview
     logger.debug(SEP)
-    logger.info("\n{}\n\n{}\n".format(
-        first_title, df.loc["stats"].T.to_string(line_width=80)))
+    if not args.ignore_title:
+        logger.info("\n" + first_title + "\n\n")
+    logger.info(df.loc["stats"].T.to_string(line_width=80) + "\n")
 
     if args.save_table:
         logger.debug(SEP)
@@ -233,7 +256,6 @@ def run(args):
                       ] if args.plot_markers else None
 
         # labels according to first dataset
-        title = first_title
         if "xlabel" in df.loc["info"].index and not df.loc[
                 "info", "xlabel"].isnull().values.any():
             index_label = df.loc["info", "xlabel"][0]
@@ -241,11 +263,11 @@ def run(args):
             index_label = "$t$ (s)" if common_index else "index"
         metric_label = df.loc["info", "label"][0]
 
-        plot_collection = plot.PlotCollection(title)
+        plot_collection = plot.PlotCollection(first_title)
         # raw value plot
         fig_raw = plt.figure(figsize=figsize)
         # handle NaNs from concat() above
-        error_df.interpolate(method="index").plot(
+        error_df.interpolate(method="index", limit_area="inside").plot(
             ax=fig_raw.gca(), colormap=colormap, style=linestyles,
             title=first_title, alpha=SETTINGS.plot_trajectory_alpha)
         plt.xlabel(index_label)
@@ -254,13 +276,15 @@ def run(args):
         plot_collection.add_figure("raw", fig_raw)
 
         # statistics plot
-        fig_stats = plt.figure(figsize=figsize)
-        exclude = df.loc["stats"].index.isin(["sse"])  # don't plot sse
-        df.loc["stats"][~exclude].plot(kind="barh", ax=fig_stats.gca(),
-                                       colormap=colormap, stacked=False)
-        plt.xlabel(metric_label)
-        plt.legend(frameon=True)
-        plot_collection.add_figure("stats", fig_stats)
+        if SETTINGS.plot_statistics:
+            fig_stats = plt.figure(figsize=figsize)
+            include = df.loc["stats"].index.isin(SETTINGS.plot_statistics)
+            if any(include):
+                df.loc["stats"][include].plot(kind="barh", ax=fig_stats.gca(),
+                                              colormap=colormap, stacked=False)
+                plt.xlabel(metric_label)
+                plt.legend(frameon=True)
+                plot_collection.add_figure("stats", fig_stats)
 
         # grid of distribution plots
         raw_tidy = pd.melt(error_df, value_vars=list(error_df.columns.values),

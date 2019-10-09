@@ -103,8 +103,11 @@ def set_cfg(cfg_path, arg_list):
                                 values.append(int(float(value)))
                         else:
                             values.append(value)
-                    if len(values) == 1:
+                    if not isinstance(data[arg], list):
                         values = values[0]
+                    elif len(values) == 1:
+                        if values[0].lower() in ("none", "", "[]"):
+                            values = []
                     data[arg] = not data[arg] if isinstance(data[arg],
                                                             bool) else values
             elif i + 1 > max_idx or arg_list[i + 1] in data:
@@ -189,7 +192,7 @@ To save the configuration, specify -o / --output.
 def main():
     import argcomplete
     basic_desc = "crappy configuration tool"
-    lic = "(c) michael.grupp@tum.de"
+    lic = "(c) evo authors"
     shared_parser = argparse.ArgumentParser(add_help=False)
     shared_parser.add_argument("--no_color", help="don't color output",
                                action="store_true")

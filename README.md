@@ -2,12 +2,11 @@
 
 ***Python package for the evaluation of odometry and SLAM***
 
-| Linux / macOS | Windows |
-| :---: | :-----: |
-| [![Linux build Status](https://travis-ci.org/MichaelGrupp/evo.svg?branch=master)](https://travis-ci.org/MichaelGrupp/evo) | [![Windows build status](https://ci.appveyor.com/api/projects/status/usg1lqx59dqdqqal?svg=true)](https://ci.appveyor.com/project/MichaelGrupp/evo)
+| Linux / macOS / Windows / ROS |
+| :---: |
+| [![Build Status](https://dev.azure.com/michl2222/michl2222/_apis/build/status/MichaelGrupp.evo?branchName=master)](https://dev.azure.com/michl2222/michl2222/_build/latest?definitionId=1&branchName=master) |
 
-
-This packages provides executables and a small library for handling, evaluating and comparing the trajectory output of odometry and SLAM algorithms.
+This package provides executables and a small library for handling, evaluating and comparing the trajectory output of odometry and SLAM algorithms.
 
 Supported trajectory formats:
 
@@ -61,7 +60,7 @@ This will download the package and its dependencies from PyPi and install or upg
 ### From Source
 Run this in the repository's base folder:
 ```bash
-pip install . --upgrade --no-binary evo
+pip install --editable . --upgrade --no-binary evo
 ```
 
 ### Dependencies
@@ -213,3 +212,13 @@ Patches are welcome, preferably as pull requests.
 [GPL-3.0 or later](https://www.gnu.org/licenses/gpl-3.0.html)
 
 If you use this package for your research, a footnote with the link to this repository is appreciated: `github.com/MichaelGrupp/evo`.
+
+...or, for citation with BibTeX:
+```
+@misc{grupp2017evo,
+  title={evo: Python package for the evaluation of odometry and SLAM.},
+  author={Grupp, Michael},
+  howpublished={\url{https://github.com/MichaelGrupp/evo}},
+  year={2017}
+}
+```

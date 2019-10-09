@@ -45,9 +45,11 @@ from evo.tools import user
 from evo.core import trajectory
 
 # configure matplotlib and seaborn according to package settings
-sns.set(style=SETTINGS.plot_seaborn_style,
-        palette=SETTINGS.plot_seaborn_palette, font=SETTINGS.plot_fontfamily,
-        font_scale=SETTINGS.plot_fontscale)
+# TODO: 'color_codes=False' to work around this bug:
+# https://github.com/mwaskom/seaborn/issues/1546
+sns.set(style=SETTINGS.plot_seaborn_style, font=SETTINGS.plot_fontfamily,
+        font_scale=SETTINGS.plot_fontscale, color_codes=False,
+        palette=SETTINGS.plot_seaborn_palette)
 rc = {
     "lines.linewidth": SETTINGS.plot_linewidth,
     "text.usetex": SETTINGS.plot_usetex,
@@ -260,10 +262,10 @@ def prepare_axis(fig, plot_mode=PlotMode.xy, subplot_arg="111"):
     :return: the matplotlib axis
     """
     if plot_mode == PlotMode.xyz:
-        ax = fig.add_subplot(subplot_arg, projection="3d", aspect="equal")
+        ax = fig.add_subplot(subplot_arg, projection="3d")
     else:
-        ax = fig.add_subplot(subplot_arg, aspect="equal")
-    plt.axis("equal")
+        ax = fig.add_subplot(subplot_arg)
+        ax.axis("equal")
     if plot_mode in {PlotMode.xy, PlotMode.xz, PlotMode.xyz}:
         xlabel = "$x$ (m)"
     elif plot_mode in {PlotMode.yz, PlotMode.yx}:
@@ -447,17 +449,18 @@ def traj_rpy(axarr, traj, style='-', color='black', label="", alpha=1.0,
     if len(axarr) != 3:
         raise PlotException("expected an axis array with 3 subplots - got " +
                             str(len(axarr)))
+    angles = traj.get_orientations_euler(SETTINGS.euler_angle_sequence)
     if isinstance(traj, trajectory.PoseTrajectory3D):
         x = traj.timestamps - (traj.timestamps[0]
                                if start_timestamp is None else start_timestamp)
         xlabel = "$t$ (s)"
     else:
-        x = range(0, len(traj.orientations_euler))
+        x = range(0, len(angles))
         xlabel = "index"
     ylabels = ["$roll$ (deg)", "$pitch$ (deg)", "$yaw$ (deg)"]
     for i in range(0, 3):
-        axarr[i].plot(x, np.rad2deg(traj.orientations_euler[:, i]), style,
-                      color=color, label=label, alpha=alpha)
+        axarr[i].plot(x, np.rad2deg(angles[:, i]), style, color=color,
+                      label=label, alpha=alpha)
         axarr[i].set_ylabel(ylabels[i])
     axarr[2].set_xlabel(xlabel)
     if label:
@@ -541,13 +544,13 @@ def error_array(fig, err_array, x_array=None, statistics=None, threshold=None,
     if statistics is not None:
         for stat_name, value in statistics.items():
             color = next(ax._get_lines.prop_cycler)['color']
-            if stat_name in {"mean", "median", "rmse"}:
-                ax.axhline(y=value, color=color, linewidth=2.0,
-                           label=stat_name)
             if stat_name == "std" and "mean" in statistics:
                 mean, std = statistics["mean"], statistics["std"]
                 ax.axhspan(mean - std / 2, mean + std / 2, color=color,
                            alpha=0.5, label=stat_name)
+            else:
+                ax.axhline(y=value, color=color, linewidth=2.0,
+                           label=stat_name)
     if threshold is not None:
         ax.axhline(y=threshold, color='red', linestyle='dashed', linewidth=2.0,
                    label="threshold")
